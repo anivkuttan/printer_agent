@@ -5,8 +5,7 @@ __pycache__/
 build/
 dist/
 *.spec
-.python-version
-build_agent.bat
+.python-version 
 
 *.exe
 .vscode/
