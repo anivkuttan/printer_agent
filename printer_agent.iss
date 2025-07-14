@@ -22,3 +22,7 @@ Name: "{commondesktop}\LAUNDRY Printer Agent"; Filename: "{app}\laundry_printer_
 
 [Run]
 Filename: "{app}\laundry_printer_agent.exe"; Description: "Start Agent Now"; Flags: nowait postinstall skipifsilent
+
+
+[SetupIconFile]
+Filename: "icon.ico"

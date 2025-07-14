@@ -18,7 +18,7 @@ if __name__ == "__main__":
     import threading
     from waitress import serve
 
-    port = int(os.getenv("PORT", 5005))
+    port = int(os.getenv("PORT", 5008))
     debug = os.getenv("DEBUG", "false").lower() == "true"
     use_waitress = os.getenv("USE_WAITRESS", "false").lower() == "true"
 
