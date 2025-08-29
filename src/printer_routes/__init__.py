@@ -1,4 +1,3 @@
-
 from flask import Blueprint
 from .health import health_api
 from .printers import printer_api

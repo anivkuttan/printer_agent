@@ -18,7 +18,7 @@ echo Building Laundry Printer Agent
 echo ==============================
 
 
-set AGENT_NAME=laundry_printer_agent_2.0.0
+set AGENT_NAME=laundry_printer_agent_2.0.2
 set INSTALLER_NAME=LAUNDRYPrinterAgentInstaller.exe
 set MAIN_FILE=src\app.py
 set VENV=.venv

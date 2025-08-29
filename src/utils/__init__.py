@@ -13,5 +13,5 @@
 # def get_routes():
 #     return [create_tray_image, start_tray, __version__]
 
-__all__ = ["list_printers", "get_default_printer",
-           "set_default_printer", "safe_base64_decode", "__version__"]
+# __all__ = ["list_printers", "get_default_printer",
+#            "set_default_printer", "safe_base64_decode", "__version__"]

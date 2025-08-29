@@ -1,3 +1,5 @@
+
+import sys
 from flask import Blueprint, request, jsonify
 import os
 import uuid
@@ -6,7 +8,8 @@ import subprocess
 import threading
 import pdfkit
 import win32print
-from ..utils.printer_utils import list_printers, get_default_printer, safe_base64_decode
+from src.utils.logger import logger
+from src.utils.printer_utils import list_printers, get_default_printer, safe_base64_decode
 
 pos_printer_api = Blueprint("new_printer_api", __name__)
 
@@ -348,44 +351,154 @@ def print_terminal():
         return jsonify({"status": 500, "error": True, "error_msg": str(e)}), 500
 
 
+# # HTML to PDF Printing Endpoint
+# @pos_printer_api.route("/print-html", methods=["POST"])
+# def print_html():
+#     """Convert HTML to PDF and print"""
+
+#     cache_dir = os.path.join(os.environ.get("TEMP", "C:\\Temp"), "print_cache")
+#     os.makedirs(cache_dir, exist_ok=True)
+
+#     filename = f"html_print_{uuid.uuid4().hex}.pdf"
+#     tmp_path = os.path.join(cache_dir, filename)
+
+#     data = request.get_json()
+#     if not data:
+#         logger.warning("Missing request data in /print-html")
+#         return jsonify({"status": 400, "error": True, "error_msg": "Missing request data"}), 400
+
+#     printer_name = data.get("printer_name")
+#     html_data = data.get("html_data")
+#     # Default to 80mm for receipts
+#     paper_width = data.get("paper_width", "80mm")
+#     paper_height = data.get("paper_height", "297mm")
+
+#     logger.info(
+#         f"Print job started - Printer: {printer_name}, File: {filename}")
+
+#     if not printer_name or not html_data:
+#         return jsonify({"status": 400, "error": True, "error_msg": "Missing printer_name or html_data"}), 400
+
+#     try:
+#         # Set printer as default
+#         win32print.SetDefaultPrinter(printer_name)
+#     except Exception:
+#         return jsonify({"status": 404, "error": True, "error_msg": "Printer not found"}), 404
+
+#     try:
+#         # Create temporary PDF file
+#         cache_dir = os.path.join(os.environ.get(
+#             "TEMP", "C:\\Temp"), "print_jobs")
+#         os.makedirs(cache_dir, exist_ok=True)
+#         filename = f"html_print_{uuid.uuid4().hex}.pdf"
+#         tmp_path = os.path.join(cache_dir, filename)
+
+#         # Convert HTML to PDF
+#         current_dir = os.path.dirname(os.path.abspath(__file__))
+#         wkhtmltopdf_path = os.path.join(
+#             current_dir, "..", "tools", "wkhtmltox", "bin", "wkhtmltopdf.exe")
+#         wkhtmltopdf_path = os.path.abspath(wkhtmltopdf_path)
+
+#         if not os.path.exists(wkhtmltopdf_path):
+#             return jsonify({"status": 500, "error": True, "error_msg": f"wkhtmltopdf not found at {wkhtmltopdf_path}"}), 500
+
+#         config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+#         options = {
+#             "page-width": paper_width,
+#             "page-height": paper_height,
+#             "encoding": "UTF-8",
+#             "margin-top": "0.05in",
+#             "margin-right": "0.05in",
+#             "margin-bottom": "0.05in",
+#             "margin-left": "0.05in",
+#             "quiet": "",
+#         }
+
+#         pdfkit.from_string(html_data, tmp_path,
+#                            configuration=config, options=options)
+
+#         # Verify file creation
+#         time.sleep(1)
+#         if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) < 100:
+#             raise Exception(f"PDF file was not properly created: {tmp_path}")
+
+#         # Print using SumatraPDF
+#         sumatra_path = os.path.join(
+#             current_dir, "..", "tools", "SumatraPDF", "SumatraPDF.exe")
+#         sumatra_path = os.path.abspath(sumatra_path)
+
+#         if not os.path.exists(sumatra_path):
+#             return jsonify({"status": 500, "error": True, "error_msg": f"SumatraPDF not found at {sumatra_path}"}), 500
+
+#         cmd = f'"{sumatra_path}" -print-to "{printer_name}" "{tmp_path}"'
+#         CREATE_NO_WINDOW = 0x08000000
+#         subprocess.Popen(cmd, shell=True, creationflags=CREATE_NO_WINDOW)
+
+#         # Schedule cleanup
+#         threading.Thread(target=delayed_cleanup, args=(
+#             tmp_path,), daemon=True).start()
+
+#         return jsonify({"status": 200, "error": False, "message": "HTML converted to PDF and sent to printer successfully"})
+
+#     except Exception as e:
+#         return jsonify({"status": 500, "error": True, "error_msg": str(e)}), 500
+
 # HTML to PDF Printing Endpoint
 @pos_printer_api.route("/print-html", methods=["POST"])
 def print_html():
     """Convert HTML to PDF and print"""
+
+    # Create cache directory for PDFs
+    cache_dir = os.path.join(os.environ.get("TEMP", "C:\\Temp"), "print_jobs")
+    os.makedirs(cache_dir, exist_ok=True)
+
+    # Generate unique filename
+    filename = f"html_print_{uuid.uuid4().hex}.pdf"
+    tmp_path = os.path.join(cache_dir, filename)
+
+    # Get request data
     data = request.get_json()
     if not data:
+        logger.warning("Missing request data in /print-html")
         return jsonify({"status": 400, "error": True, "error_msg": "Missing request data"}), 400
 
     printer_name = data.get("printer_name")
     html_data = data.get("html_data")
-    # Default to 80mm for receipts
     paper_width = data.get("paper_width", "80mm")
     paper_height = data.get("paper_height", "297mm")
 
     if not printer_name or not html_data:
+        logger.warning(
+            f"Missing fields - printer_name: {printer_name}, html_data present: {bool(html_data)}")
         return jsonify({"status": 400, "error": True, "error_msg": "Missing printer_name or html_data"}), 400
 
+    logger.info(
+        f"Print job started - Printer: {printer_name}, File: {filename}")
+
+    # Set printer as default
     try:
-        # Set printer as default
         win32print.SetDefaultPrinter(printer_name)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Printer not found: {printer_name}, Error: {str(e)}")
         return jsonify({"status": 404, "error": True, "error_msg": "Printer not found"}), 404
 
     try:
-        # Create temporary PDF file
-        cache_dir = os.path.join(os.environ.get(
-            "TEMP", "C:\\Temp"), "print_jobs")
-        os.makedirs(cache_dir, exist_ok=True)
-        filename = f"html_print_{uuid.uuid4().hex}.pdf"
-        tmp_path = os.path.join(cache_dir, filename)
+
+        if getattr(sys, "frozen", False):
+            base_path = os.path.dirname(sys.executable)
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
 
         # Convert HTML to PDF
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # current_dir = os.path.dirname(os.path.abspath(__file__))
+        # wkhtmltopdf_path = os.path.join(
+        #     current_dir, "..", "tools", "wkhtmltox", "bin", "wkhtmltopdf.exe")
+        # wkhtmltopdf_path = os.path.abspath(wkhtmltopdf_path)
         wkhtmltopdf_path = os.path.join(
-            current_dir, "..", "tools", "wkhtmltox", "bin", "wkhtmltopdf.exe")
-        wkhtmltopdf_path = os.path.abspath(wkhtmltopdf_path)
+            base_path, "tools", "wkhtmltox", "bin", "wkhtmltopdf.exe")
 
         if not os.path.exists(wkhtmltopdf_path):
+            logger.error(f"wkhtmltopdf not found at {wkhtmltopdf_path}")
             return jsonify({"status": 500, "error": True, "error_msg": f"wkhtmltopdf not found at {wkhtmltopdf_path}"}), 500
 
         config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
@@ -403,22 +516,29 @@ def print_html():
         pdfkit.from_string(html_data, tmp_path,
                            configuration=config, options=options)
 
-        # Verify file creation
-        time.sleep(1)
+        # Verify PDF creation
         if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) < 100:
             raise Exception(f"PDF file was not properly created: {tmp_path}")
 
+        logger.info(f"PDF created successfully at {tmp_path}")
+
         # Print using SumatraPDF
+        # sumatra_path = os.path.join(
+        #     current_dir, "..", "tools", "SumatraPDF", "SumatraPDF.exe")
+        # sumatra_path = os.path.abspath(sumatra_path)
         sumatra_path = os.path.join(
-            current_dir, "..", "tools", "SumatraPDF", "SumatraPDF.exe")
-        sumatra_path = os.path.abspath(sumatra_path)
+            base_path, "tools", "SumatraPDF", "SumatraPDF.exe")
 
         if not os.path.exists(sumatra_path):
+            logger.error(f"SumatraPDF not found at {sumatra_path}")
             return jsonify({"status": 500, "error": True, "error_msg": f"SumatraPDF not found at {sumatra_path}"}), 500
 
         cmd = f'"{sumatra_path}" -print-to "{printer_name}" "{tmp_path}"'
         CREATE_NO_WINDOW = 0x08000000
         subprocess.Popen(cmd, shell=True, creationflags=CREATE_NO_WINDOW)
+
+        logger.info(
+            f"Print command sent to printer: {printer_name}, File: {tmp_path}")
 
         # Schedule cleanup
         threading.Thread(target=delayed_cleanup, args=(
@@ -427,4 +547,6 @@ def print_html():
         return jsonify({"status": 200, "error": False, "message": "HTML converted to PDF and sent to printer successfully"})
 
     except Exception as e:
+        logger.error(
+            f"Print job failed - Printer: {printer_name}, File: {tmp_path}, Error: {str(e)}", exc_info=True)
         return jsonify({"status": 500, "error": True, "error_msg": str(e)}), 500

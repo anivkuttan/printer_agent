@@ -6,7 +6,7 @@ import subprocess
 import threading
 import pdfkit
 import win32print
-from ..utils.printer_utils import list_printers, get_default_printer, safe_base64_decode
+from src.utils.printer_utils import list_printers, get_default_printer, safe_base64_decode
 
 printer_api = Blueprint("printer_api", __name__)
 
