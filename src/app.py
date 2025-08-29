@@ -1,18 +1,16 @@
-from src.utils.tray import start_tray
-from src.printer_routes import get_routes
+import os
+import sys
 from dotenv import load_dotenv
 from flask_cors import CORS
 from flask import Flask, jsonify
-import sys
-import os
 
-# Add current directory and src folder to sys.path
-base_dir = os.path.dirname(os.path.abspath(__file__))
-src_path = os.path.join(base_dir, "src")
+# Add project root to path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
-
+from src.utils.tray import start_tray
+from src.printer_routes import get_routes
 
 load_dotenv()
 
