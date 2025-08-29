@@ -1,16 +1,25 @@
- 
-from flask import Flask
-from flask_cors import CORS
+from src.utils.tray import start_tray
+from src.printer_routes import get_routes
 from dotenv import load_dotenv
- 
-from src.printer_routes import printer_api
-from src.tray import start_tray
-load_dotenv() 
+from flask_cors import CORS
+from flask import Flask, jsonify
+import sys
+import os
+
+# Add current directory and src folder to sys.path
+base_dir = os.path.dirname(os.path.abspath(__file__))
+src_path = os.path.join(base_dir, "src")
+
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
-app.register_blueprint(printer_api)
-
+for route in get_routes():
+    app.register_blueprint(route)
 
 
 if __name__ == "__main__":

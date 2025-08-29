@@ -18,7 +18,7 @@ echo Building Laundry Printer Agent
 echo ==============================
 
 
-set AGENT_NAME=laundry_printer_agent
+set AGENT_NAME=laundry_printer_agent_2.0.0
 set INSTALLER_NAME=LAUNDRYPrinterAgentInstaller.exe
 set MAIN_FILE=src\app.py
 set VENV=.venv
@@ -30,7 +30,8 @@ echo Installing PyInstaller (silent)...
 pip install pyinstaller >nul 2>&1
 
 echo Building executable with PyInstaller...
-pyinstaller --onefile --noconsole --name %AGENT_NAME% %MAIN_FILE%
+@REM pyinstaller --onefile --noconsole --name %AGENT_NAME% %MAIN_FILE%
+pyinstaller --onefile --noconsole --paths src --name %AGENT_NAME% %MAIN_FILE%
 
 echo Creating installer with Inno Setup...
 %INNO_COMPILER% printer_agent.iss

@@ -19,12 +19,12 @@ install:
 
 # Run in development mode (DEBUG and other envs will be loaded from .env)
 run-dev:
-	$(VENV_PYTHON) app.py
+	$(VENV_PYTHON) -m src.app
 
 # Run in production mode (USE_WAITRESS=true in .env will trigger waitress)
 run-prod:
 ifeq ($(OS),Windows_NT)
-	$(VENV_PYTHON) app.py
+	$(VENV_PYTHON) -m src.app
 else
 	$(VENV)/bin/gunicorn -w 2 -b 127.0.0.1:5006 app:app
 endif
