@@ -42,6 +42,16 @@ def safe_base64_decode(data):
     return base64.b64decode(data)
 
 
+def safe_base64_decode_v2(data):
+    if not isinstance(data, str):
+        raise TypeError(f"Expected string, got {type(data).__name__}")
+
+    data = data.strip()
+    missing_padding = len(data) % 4
+    if missing_padding:
+        data += '=' * (4 - missing_padding)
+    return base64.b64decode(data)
+
 # def printer_exists(printer_name):
 #     """Check if a printer exists"""
 #     available_printers = list_printers()
