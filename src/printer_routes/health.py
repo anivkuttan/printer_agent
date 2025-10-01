@@ -6,9 +6,21 @@ health_api = Blueprint("health_api", __name__)
 
 @health_api.route("/ping", methods=["GET"])
 def ping():
-    return jsonify({"status": "ok", "version": __version__}), 200
+    data = {
+        "statusCode": 200,
+        "status": True,
+        "message": "Agent is running",
+        "data": {"status": "ok", "version": __version__}
+    }
+    return jsonify(data), 200
 
 
 @health_api.route("/version", methods=["GET"])
 def get_version():
-    return jsonify({"version": __version__})
+    data = {
+        "statusCode": 200,
+        "status": True,
+        "message": "Agent is running",
+        "data": {"version": __version__}
+    }
+    return jsonify(data)

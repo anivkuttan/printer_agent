@@ -151,13 +151,16 @@ def get_printers():
     try:
         printer_names = list_printers()
         default_printer = get_default_printer()
-        return jsonify({
-            "status": 200,
-            "printers": printer_names,
-            "default_printer": default_printer,
-        })
+        data = {
+            "statusCode": 200,
+            "status": True,
+            "message": "Agent is running",
+            "data": {"printers": printer_names,
+                     "default_printer": default_printer, }
+        }
+        return jsonify(data)
     except Exception as e:
-        return jsonify({"status": 500, "error": True, "error_msg": str(e)}), 500
+        return jsonify({"statusCode": 500, "status": False, "message": str(e)}), 500
 
 
 # PDF Printing Endpoint
@@ -166,19 +169,37 @@ def print_pdf():
     """Print PDF document to specified printer"""
     data = request.get_json()
     if not data:
-        return jsonify({"status": 400, "error": True, "error_msg": "Missing request data"}), 400
+        data = {
+            "statusCode": 400,
+            "status": False,
+            "message": "Missing request data",
+
+        }
+        return jsonify(data), 400
 
     printer_name = data.get("printer_name")
     pdf_data = data.get("pdf_data")  # Base64 encoded PDF
 
     if not printer_name or not pdf_data:
-        return jsonify({"status": 400, "error": True, "error_msg": "Missing printer_name or pdf_data"}), 400
+        data = {
+            "statusCode": 400,
+            "status": False,
+            "message": "Missing printer_name or pdf_data",
+
+        }
+        return jsonify(data), 400
 
     try:
         # Set printer as default
         win32print.SetDefaultPrinter(printer_name)
     except Exception:
-        return jsonify({"status": 404, "error": True, "error_msg": "Printer not found"}), 404
+        data = {
+            "statusCode": 404,
+            "status": False,
+            "message": "Printer not found",
+
+        }
+        return jsonify(data), 404
 
     try:
         # Create temporary PDF file
@@ -211,7 +232,13 @@ def print_pdf():
         sumatra_path = os.path.abspath(sumatra_path)
 
         if not os.path.exists(sumatra_path):
-            return jsonify({"status": 500, "error": True, "error_msg": f"SumatraPDF not found at {sumatra_path}"}), 500
+            data = {
+                "statusCode": 500,
+                "status": False,
+                "message": f"SumatraPDF not found at {sumatra_path}",
+
+            }
+            return jsonify(data), 500
 
         cmd = f'"{sumatra_path}" -print-to "{printer_name}" "{tmp_path}"'
         CREATE_NO_WINDOW = 0x08000000
@@ -220,11 +247,22 @@ def print_pdf():
         # Schedule cleanup
         threading.Thread(target=delayed_cleanup, args=(
             tmp_path,), daemon=True).start()
+        data = {
+            "statusCode": 200,
+            "status": True,
+            "message": "PDF sent to printer successfully",
 
-        return jsonify({"status": 200, "error": False, "message": "PDF sent to printer successfully"})
+        }
+        return jsonify(data)
 
     except Exception as e:
-        return jsonify({"status": 500, "error": True, "error_msg": str(e)}), 500
+        data = {
+            "statusCode": 500,
+            "status": False,
+            "message":  str(e),
+
+        }
+        return jsonify(data), 500
 
 
 # POS Receipt Printing Endpoint

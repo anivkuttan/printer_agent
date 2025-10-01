@@ -277,19 +277,37 @@ def print_pdf(data: str, printer_name: str):
     """Print PDF document to specified printer"""
     # data = request.get_json()
     if not data:
-        return jsonify({"status": 400, "error": True, "error_msg": "Missing request data"}), 400
+        result = {
+            "statusCode": 400,
+            "status": False,
+            "message": "Missing request data",
+
+        }
+        return jsonify(result), 400
 
     # printer_name = printer_name
     pdf_data = data  # Base64 encoded PDF
 
     if not printer_name or not pdf_data:
-        return jsonify({"status": 400, "error": True, "error_msg": "Missing printer_name or pdf_data"}), 400
+        result = {
+            "statusCode": 400,
+            "status": False,
+            "message": "Missing printer_name or pdf_data",
+
+        }
+        return jsonify(result), 400
 
     try:
         # Set printer as default
         win32print.SetDefaultPrinter(printer_name)
     except Exception:
-        return jsonify({"status": 404, "error": True, "error_msg": "Printer not found"}), 404
+        result = {
+            "statusCode": 404,
+            "status": False,
+            "message": "Printer not found",
+
+        }
+        return jsonify(result), 404
 
     try:
         # Create temporary PDF file
@@ -323,7 +341,13 @@ def print_pdf(data: str, printer_name: str):
         sumatra_path = os.path.abspath(sumatra_path)
 
         if not os.path.exists(sumatra_path):
-            return jsonify({"status": 500, "error": True, "error_msg": f"SumatraPDF not found at {sumatra_path}"}), 500
+            result = {
+                "statusCode": 500,
+                "status": False,
+                "message": f"SumatraPDF not found at {sumatra_path}",
+
+            }
+            return jsonify(result), 500
 
         cmd = f'"{sumatra_path}" -print-to "{printer_name}" "{tmp_path}"'
         CREATE_NO_WINDOW = 0x08000000
@@ -333,10 +357,22 @@ def print_pdf(data: str, printer_name: str):
         threading.Thread(target=delayed_cleanup, args=(
             tmp_path,), daemon=True).start()
 
-        return jsonify({"status": 200, "error": False, "message": "PDF sent to printer successfully"})
+        result = {
+            "statusCode": 400,
+            "status": False,
+            "message": "PDF sent to printer successfully",
+
+        }
+        return jsonify(result)
 
     except Exception as e:
-        return jsonify({"status": 500, "error": True, "error_msg": str(e)}), 500
+        result = {
+            "statusCode": 500,
+            "status": False,
+            "message": str(e),
+
+        }
+        return jsonify(result), 500
 
 
 def delayed_cleanup(path):
@@ -374,19 +410,37 @@ def print_pos():
     """Print POS receipt with ESC/POS formatting to thermal printer"""
     data = request.get_json()
     if not data:
-        return jsonify({"status": 400, "error": True, "error_msg": "Missing request data"}), 400
+        result = {
+            "statusCode": 400,
+            "status": False,
+            "message": "Missing request data",
+
+        }
+        return jsonify(result), 400
 
     printer_name = data.get("printer_name")
     receipt_data = data.get("receipt_data")
 
     if not printer_name or not receipt_data:
-        return jsonify({"status": 400, "error": True, "error_msg": "Missing printer_name or receipt_data"}), 400
+        result = {
+            "statusCode": 400,
+            "status": False,
+            "message": "Missing printer_name or receipt_data",
+
+        }
+        return jsonify(result), 400
 
     try:
         # Set printer as default
         win32print.SetDefaultPrinter(printer_name)
     except Exception:
-        return jsonify({"status": 404, "error": True, "error_msg": "Printer not found"}), 404
+        result = {
+            "statusCode": 404,
+            "status": False,
+            "message":  "Printer not found",
+
+        }
+        return jsonify(result), 404
 
     try:
         # Format receipt with ESC/POS commands
@@ -406,8 +460,19 @@ def print_pos():
         win32print.EndPagePrinter(hPrinter)
         win32print.EndDocPrinter(hPrinter)
         win32print.ClosePrinter(hPrinter)
+        result = {
+            "statusCode": 200,
+            "status": True,
+            "message":  "POS receipt printed successfully",
 
-        return jsonify({"status": 200, "error": False, "message": "POS receipt printed successfully"})
+        }
+        return jsonify(result)
 
     except Exception as e:
-        return jsonify({"status": 500, "error": True, "error_msg": str(e)}), 500
+        result = {
+            "statusCode": 500,
+            "status": False,
+            "message":  str(e),
+
+        }
+        return jsonify(result), 500
