@@ -11,6 +11,7 @@ from src.utils.logger import logger
 from src.utils.printer_utils import list_printers, get_default_printer, safe_base64_decode, safe_base64_decode_v2
 import base64
 import io
+import re
 from datetime import datetime
 import uuid
 import time
@@ -28,6 +29,103 @@ from reportlab.pdfbase.ttfonts import TTFont
 pos_printer_v2_api = Blueprint("pos_printer_v2_api", __name__)
 
 
+def encode_mixed_text(text):
+    """Encode text with mixed English and Arabic characters"""
+    result = b''
+
+    # Regular expression to find Arabic characters
+    # Arabic Unicode range: \u0600-\u06FF
+    parts = re.split(
+        r'([\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+)', text)
+
+    for part in parts:
+        if not part:
+            continue
+
+        # Check if this part contains Arabic characters
+        if re.search(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]', part):
+            # Arabic text - switch to CP1256
+            result += b'\x1b\x74\x28'  # ESC t 40 - Set code page 1256
+            result += part.encode('cp1256', errors='ignore')
+            result += b'\x1b\x74\x00'  # ESC t 0 - Reset to default
+        else:
+            # English/numbers/symbols - use UTF-8
+            result += part.encode('utf-8', errors='ignore')
+
+    return result
+
+
+def decode_mixed_text(encoded_bytes):
+    """Decode mixed encoded text for display/debugging purposes"""
+    result = ''
+    i = 0
+    current_encoding = 'utf-8'  # Default encoding
+
+    while i < len(encoded_bytes):
+        # Check for ESC/POS code page switch commands
+        if i + 2 < len(encoded_bytes) and encoded_bytes[i:i+2] == b'\x1b\x74':
+            # ESC t command (code page selection)
+            code_page = encoded_bytes[i+2]
+
+            if code_page == 0x28:  # 40 decimal - CP1256
+                current_encoding = 'cp1256'
+            elif code_page == 0x00:  # 0 - Reset to default
+                current_encoding = 'utf-8'
+            elif code_page == 0x16:  # 22 - CP864
+                current_encoding = 'cp864'
+
+            i += 3  # Skip the ESC t X command
+            continue
+
+        # Skip other ESC/POS control sequences
+        if i < len(encoded_bytes) and encoded_bytes[i] == 0x1b:  # ESC
+            # Skip ESC and next 1-2 bytes (most ESC commands)
+            if i + 1 < len(encoded_bytes):
+                if encoded_bytes[i+1] in [0x61, 0x45, 0x2d]:  # ESC a, ESC E, ESC -
+                    i += 3
+                    continue
+                else:
+                    i += 2
+                    continue
+            else:
+                i += 1
+                continue
+
+        # Try to decode the current byte with current encoding
+        try:
+            if current_encoding == 'cp1256':
+                # CP1256 is single-byte encoding
+                char = encoded_bytes[i:i+1].decode('cp1256', errors='replace')
+                result += char
+                i += 1
+            elif current_encoding == 'cp864':
+                char = encoded_bytes[i:i+1].decode('cp864', errors='replace')
+                result += char
+                i += 1
+            else:  # UTF-8
+                # UTF-8 can be multi-byte (1-4 bytes)
+                decoded = False
+                for byte_count in range(1, 5):
+                    if i + byte_count <= len(encoded_bytes):
+                        try:
+                            char = encoded_bytes[i:i +
+                                                 byte_count].decode('utf-8')
+                            result += char
+                            i += byte_count
+                            decoded = True
+                            break
+                        except UnicodeDecodeError:
+                            continue
+
+                if not decoded:
+                    # If we couldn't decode, just skip this byte
+                    i += 1
+        except Exception:
+            i += 1
+
+    return result
+
+
 def create_separator_line():
     """Create a separator line"""
     return ESCPOSCommands.HORIZONTAL_LINE.encode('utf-8')
@@ -40,10 +138,10 @@ def create_laundry_receipt_header(store_name="", location=""):
     header += ESCPOSCommands.BOLD_ON
     header += ESCPOSCommands.DOUBLE_SIZE
     if store_name:
-        header += f"{store_name}\n".encode('utf-8')
+        header += encode_mixed_text(f"{store_name}\n")
     header += ESCPOSCommands.NORMAL_SIZE
     if location:
-        header += f"📍\n{location}\n".encode('utf-8')
+        header += encode_mixed_text(f"\n{location}\n")
     header += ESCPOSCommands.BOLD_OFF
     header += ESCPOSCommands.ALIGN_LEFT
     header += create_separator_line()
@@ -67,43 +165,48 @@ def format_laundry_receipt(data):
 
     # Order details section
     receipt += ESCPOSCommands.ALIGN_LEFT
-    receipt += f"Order No - مربطلا مقر:\n".encode('utf-8')
+    receipt += encode_mixed_text(f"Order No - مربطلا مقر:\n")
     receipt += ESCPOSCommands.BOLD_ON
-    receipt += f"{receipt_data.get('order_no', '')}\n".encode('utf-8')
+    receipt += encode_mixed_text(f"{receipt_data.get('order_no', '')}\n")
     receipt += ESCPOSCommands.BOLD_OFF
     receipt += create_separator_line()
 
     # Date and time info
-    receipt += f"Order Date / تقولا خیرات : {receipt_data.get('order_date', '')}\n".encode(
-        'utf-8')
-    receipt += f"Order Time / تقولا تیقوت : {receipt_data.get('order_time', '')}\n".encode(
-        'utf-8')
-    receipt += f"cashier: {receipt_data.get('cashier', '')}\n".encode('utf-8')
-    receipt += f"iron : {receipt_data.get('service_type', '')}\n".encode(
-        'utf-8')
+    receipt += encode_mixed_text(
+        f"Order Date / تقولا خیرات : {receipt_data.get('order_date', '')}\n")
+    receipt += encode_mixed_text(
+        f"Order Time / تقولا تیقوت : {receipt_data.get('order_time', '')}\n")
+    receipt += encode_mixed_text(
+        f"cashier: {receipt_data.get('cashier', '')}\n")
+    receipt += encode_mixed_text(
+        f"iron : {receipt_data.get('service_type', '')}\n")
     receipt += create_separator_line()
 
     # Customer details section
     receipt += ESCPOSCommands.ALIGN_CENTER
     receipt += ESCPOSCommands.BOLD_ON
-    receipt += "Customer Details\n".encode('utf-8')
+    receipt += encode_mixed_text("Customer Details\n")
     receipt += ESCPOSCommands.BOLD_OFF
     receipt += ESCPOSCommands.ALIGN_LEFT
     receipt += create_separator_line()
 
     customer = receipt_data.get('customer', {})
-    receipt += f"{customer.get('username', '')} :  Customer\n".encode('utf-8')
-    receipt += f"{customer.get('mobile', '')} :  Mobile No\n".encode('utf-8')
-    receipt += f"{customer.get('area', '')} :  Area\n".encode('utf-8')
-    receipt += f"{customer.get('street', '')} :  Street\n".encode('utf-8')
-    receipt += f"{customer.get('block', '')} :  Block\n".encode('utf-8')
-    receipt += f"{customer.get('floor', '')} :  Floor\n".encode('utf-8')
-    receipt += f"{customer.get('building', '')} :  Building\n".encode('utf-8')
+    receipt += encode_mixed_text(
+        f"{customer.get('username', '')} :  Customer\n")
+    receipt += encode_mixed_text(
+        f"{customer.get('mobile', '')} :  Mobile No\n")
+    receipt += encode_mixed_text(f"{customer.get('area', '')} :  Area\n")
+    receipt += encode_mixed_text(f"{customer.get('street', '')} :  Street\n")
+    receipt += encode_mixed_text(f"{customer.get('block', '')} :  Block\n")
+    receipt += encode_mixed_text(f"{customer.get('floor', '')} :  Floor\n")
+    receipt += encode_mixed_text(
+        f"{customer.get('building', '')} :  Building\n")
 
     receipt += create_separator_line()
 
     # Items header
-    receipt += f"#{'':15}Item / مقر{'':8}ةکب/ {'':6}رعسلا /\n".encode('utf-8')
+    receipt += encode_mixed_text(
+        f"#{'':15}Item / مقر{'':8}ةکب/ {'':6}رعسلا /\n")
     receipt += create_separator_line()
 
     # Items list
@@ -114,8 +217,8 @@ def format_laundry_receipt(data):
         price = item.get('price', 0.0)
 
         # Format item line to match the receipt
-        receipt += f"{i:<3}{name:<25}{quantity:<3}{price:.3f}\n".encode(
-            'utf-8')
+        receipt += encode_mixed_text(
+            f"{i:<3}{name:<25}{quantity:<3}{price:.3f}\n")
 
     receipt += create_separator_line()
 
@@ -123,21 +226,26 @@ def format_laundry_receipt(data):
     total = receipt_data.get('total', 0.0)
 
     receipt += ESCPOSCommands.ALIGN_RIGHT
-    receipt += f"Total / عومجم : {total:.3f} KWD\n".encode('utf-8')
+
+    receipt += encode_mixed_text(f"Total / عومجم : {total:.3f} KWD\n")
+
     receipt += "\n".encode('utf-8')
-    receipt += f"Total / عومجم\n".encode('utf-8')
-    receipt += f"{total:.3f} KWD\n".encode('utf-8')
+    receipt += encode_mixed_text(f"Total / عومجم\n")
+    receipt += encode_mixed_text(f"{total:.3f} KWD\n")
     receipt += "\n".encode('utf-8')
     receipt += f"Amount Received / ملتسم غلبم\n".encode('utf-8')
-    receipt += f"{receipt_data.get('amount_received', 0.0):.3f} KWD\n".encode('utf-8')
+    receipt += encode_mixed_text(
+        f"{receipt_data.get('amount_received', 0.0):.3f} KWD\n")
 
     receipt += ESCPOSCommands.ALIGN_CENTER
     receipt += create_separator_line()
 
     # Footer with call number and timestamp
-    receipt += f"Call {receipt_data.get('call_number', '')}\n".encode('utf-8')
+    receipt += encode_mixed_text(
+        f"Call {receipt_data.get('call_number', '')}\n")
     receipt += "\n".encode('utf-8')
-    receipt += f"{receipt_data.get('timestamp', datetime.now().strftime('%d-%b-%Y %I:%M %p'))}\n".encode('utf-8')
+    receipt += encode_mixed_text(
+        f"{receipt_data.get('timestamp', datetime.now().strftime('%d-%b-%Y %I:%M %p'))}\n")
 
     # Cut paper
     receipt += ESCPOSCommands.CUT_PAPER
@@ -447,7 +555,9 @@ def print_pos():
         formatted_receipt = format_laundry_receipt(receipt_data)
 
         # Clean and decode the receipt text
-        receipt_text = formatted_receipt.decode('utf-8', errors='ignore')
+        # receipt_text = formatted_receipt.decode('utf-8', errors='ignore')
+
+        receipt_text = decode_mixed_text(formatted_receipt)
         print(receipt_text)
 
         # Print to thermal printer
