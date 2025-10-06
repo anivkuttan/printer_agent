@@ -28,13 +28,35 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 pos_printer_v2_api = Blueprint("pos_printer_v2_api", __name__)
 
+PRINTER_ENCODING = {
+    'esc_code': b'\x1b\x74\x11',  # Default: CP720
+    'encoding': 'cp720',
+    'name': 'CP720'
+}
+
+
+def set_printer_encoding(encoding_number):
+    """Set the printer encoding based on test results"""
+    global PRINTER_ENCODING
+
+    encodings = {
+        1: {'esc_code': b'\x1b\x74\x11', 'encoding': 'cp720', 'name': 'CP720'},
+        2: {'esc_code': b'\x1b\x74\x16', 'encoding': 'cp864', 'name': 'CP864'},
+        3: {'esc_code': b'\x1b\x74\x28', 'encoding': 'cp1256', 'name': 'CP1256'},
+        4: {'esc_code': b'\x1b\x74\x29', 'encoding': 'cp1256', 'name': 'CP1257'},
+        5: {'esc_code': b'\x1b\x74\x07', 'encoding': 'iso-8859-6', 'name': 'ISO-8859-6'},
+    }
+
+    if encoding_number in encodings:
+        PRINTER_ENCODING = encodings[encoding_number]
+        print(f"Printer encoding set to: {PRINTER_ENCODING['name']}")
+        return True
+    return False
+
 
 def encode_mixed_text(text):
     """Encode text with mixed English and Arabic characters"""
     result = b''
-
-    # Regular expression to find Arabic characters
-    # Arabic Unicode range: \u0600-\u06FF
     parts = re.split(
         r'([\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+)', text)
 
@@ -42,46 +64,44 @@ def encode_mixed_text(text):
         if not part:
             continue
 
-        # Check if this part contains Arabic characters
         if re.search(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]', part):
-            # Arabic text - switch to CP1256
-            result += b'\x1b\x74\x28'  # ESC t 40 - Set code page 1256
-            result += part.encode('cp1256', errors='ignore')
-            result += b'\x1b\x74\x00'  # ESC t 0 - Reset to default
+            result += PRINTER_ENCODING['esc_code']
+            result += part.encode(PRINTER_ENCODING['encoding'],
+                                  errors='ignore')
+            result += b'\x1b\x74\x00'
         else:
-            # English/numbers/symbols - use UTF-8
             result += part.encode('utf-8', errors='ignore')
 
     return result
 
 
 def decode_mixed_text(encoded_bytes):
-    """Decode mixed encoded text for display/debugging purposes"""
+    """Decode mixed encoded text for display/debugging"""
     result = ''
     i = 0
-    current_encoding = 'utf-8'  # Default encoding
+    current_encoding = 'utf-8'
 
     while i < len(encoded_bytes):
-        # Check for ESC/POS code page switch commands
         if i + 2 < len(encoded_bytes) and encoded_bytes[i:i+2] == b'\x1b\x74':
-            # ESC t command (code page selection)
             code_page = encoded_bytes[i+2]
 
-            if code_page == 0x28:  # 40 decimal - CP1256
-                current_encoding = 'cp1256'
-            elif code_page == 0x00:  # 0 - Reset to default
-                current_encoding = 'utf-8'
-            elif code_page == 0x16:  # 22 - CP864
+            if code_page == 0x11:
+                current_encoding = 'cp720'
+            elif code_page == 0x16:
                 current_encoding = 'cp864'
+            elif code_page == 0x28:
+                current_encoding = 'cp1256'
+            elif code_page == 0x07:
+                current_encoding = 'iso-8859-6'
+            elif code_page == 0x00:
+                current_encoding = 'utf-8'
 
-            i += 3  # Skip the ESC t X command
+            i += 3
             continue
 
-        # Skip other ESC/POS control sequences
-        if i < len(encoded_bytes) and encoded_bytes[i] == 0x1b:  # ESC
-            # Skip ESC and next 1-2 bytes (most ESC commands)
+        if i < len(encoded_bytes) and encoded_bytes[i] == 0x1b:
             if i + 1 < len(encoded_bytes):
-                if encoded_bytes[i+1] in [0x61, 0x45, 0x2d]:  # ESC a, ESC E, ESC -
+                if encoded_bytes[i+1] in [0x61, 0x45, 0x2d]:
                     i += 3
                     continue
                 else:
@@ -91,19 +111,13 @@ def decode_mixed_text(encoded_bytes):
                 i += 1
                 continue
 
-        # Try to decode the current byte with current encoding
         try:
-            if current_encoding == 'cp1256':
-                # CP1256 is single-byte encoding
-                char = encoded_bytes[i:i+1].decode('cp1256', errors='replace')
+            if current_encoding in ['cp720', 'cp864', 'cp1256', 'iso-8859-6']:
+                char = encoded_bytes[i:i +
+                                     1].decode(current_encoding, errors='replace')
                 result += char
                 i += 1
-            elif current_encoding == 'cp864':
-                char = encoded_bytes[i:i+1].decode('cp864', errors='replace')
-                result += char
-                i += 1
-            else:  # UTF-8
-                # UTF-8 can be multi-byte (1-4 bytes)
+            else:
                 decoded = False
                 for byte_count in range(1, 5):
                     if i + byte_count <= len(encoded_bytes):
@@ -116,9 +130,7 @@ def decode_mixed_text(encoded_bytes):
                             break
                         except UnicodeDecodeError:
                             continue
-
                 if not decoded:
-                    # If we couldn't decode, just skip this byte
                     i += 1
         except Exception:
             i += 1
@@ -512,7 +524,9 @@ def test_receipt():
         return jsonify({"status": 500, "error": True, "error_msg": str(e)}), 500
 
 
-# POS Receipt Printing Endpoint
+set_printer_encoding(1)
+
+
 @pos_printer_v2_api.route("/print-pos-v2", methods=["POST"])
 def print_pos():
     """Print POS receipt with ESC/POS formatting to thermal printer"""
@@ -586,3 +600,127 @@ def print_pos():
 
         }
         return jsonify(result), 500
+
+
+@pos_printer_v2_api.route("/test-arabic-encodings", methods=["POST"])
+def test_arabic_encodings():
+    """Test all Arabic encodings to find which works with your printer"""
+    data = request.get_json()
+    if not data:
+        return jsonify({
+            "statusCode": 400,
+            "status": False,
+            "message": "Missing request data"
+        }), 400
+
+    printer_name = data.get("printer_name")
+
+    if not printer_name:
+        return jsonify({
+            "statusCode": 400,
+            "status": False,
+            "message": "Missing printer_name"
+        }), 400
+
+    try:
+        win32print.SetDefaultPrinter(printer_name)
+    except Exception:
+        return jsonify({
+            "statusCode": 404,
+            "status": False,
+            "message": "Printer not found"
+        }), 404
+
+    # Test Arabic text
+    test_arabic = "مرحبا بك"  # "Welcome" in Arabic
+    test_text = "Hello / مرحبا"
+
+    # All common Arabic code pages for thermal printers
+    code_pages = [
+        {"name": "CP720 (Arabic - Transparent ASMO)",
+         "esc_code": b'\x1b\x74\x11', "encoding": "cp720"},
+        {"name": "CP864 (Arabic - IBM)",
+         "esc_code": b'\x1b\x74\x16', "encoding": "cp864"},
+        {"name": "CP1256 (Windows Arabic)",
+         "esc_code": b'\x1b\x74\x28', "encoding": "cp1256"},
+        {"name": "CP1257 (Windows Baltic - sometimes used)",
+         "esc_code": b'\x1b\x74\x29', "encoding": "cp1256"},
+        {"name": "ISO-8859-6 (Arabic)", "esc_code": b'\x1b\x74\x07',
+         "encoding": "iso-8859-6"},
+    ]
+
+    try:
+        hPrinter = win32print.OpenPrinter(printer_name)
+        doc_info = ("Arabic Encoding Test", None, "RAW")
+        hJob = win32print.StartDocPrinter(hPrinter, 1, doc_info)
+        win32print.StartPagePrinter(hPrinter)
+
+        # Print header
+        receipt = b'\x1b\x40'  # Initialize printer
+        receipt += b'\x1b\x61\x01'  # Center align
+        receipt += b'\x1b\x45\x01'  # Bold ON
+        receipt += "ARABIC ENCODING TEST\n".encode('utf-8')
+        receipt += b'\x1b\x45\x00'  # Bold OFF
+        receipt += "EPSON TM-T20III\n".encode('utf-8')
+        receipt += b'\x1b\x61\x00'  # Left align
+        receipt += b'-' * 48 + b'\n'
+        receipt += "Check which line shows Arabic correctly:\n".encode('utf-8')
+        receipt += b'-' * 48 + b'\n\n'
+
+        # Test each code page
+        for i, cp in enumerate(code_pages, 1):
+            try:
+                # Print code page name
+                receipt += b'\x1b\x45\x01'  # Bold ON
+                receipt += f"[{i}] {cp['name']}\n".encode('utf-8')
+                receipt += b'\x1b\x45\x00'  # Bold OFF
+
+                # Set code page
+                receipt += cp['esc_code']
+
+                # Print test text with this encoding
+                receipt += f"Test: {test_text}\n".encode(
+                    cp['encoding'], errors='replace')
+                receipt += f"Arabic: {test_arabic}\n".encode(
+                    cp['encoding'], errors='replace')
+
+                # Reset to default
+                receipt += b'\x1b\x74\x00'
+
+                receipt += b'-' * 48 + b'\n'
+
+            except Exception as e:
+                receipt += f"ERROR with {cp['name']}: {str(e)}\n".encode(
+                    'utf-8', errors='ignore')
+                receipt += b'-' * 48 + b'\n'
+
+        # Print footer
+        receipt += b'\n'
+        receipt += b'\x1b\x61\x01'  # Center align
+        receipt += "Find the line with correct Arabic\n".encode('utf-8')
+        receipt += "and use that encoding number!\n".encode('utf-8')
+        receipt += b'\x1b\x61\x00'  # Left align
+        receipt += b'\n\n\n\n'
+
+        # Cut paper
+        receipt += b'\x1d\x56\x00'
+
+        # Send to printer
+        win32print.WritePrinter(hPrinter, receipt)
+        win32print.EndPagePrinter(hPrinter)
+        win32print.EndDocPrinter(hPrinter)
+        win32print.ClosePrinter(hPrinter)
+
+        return jsonify({
+            "statusCode": 200,
+            "status": True,
+            "message": "Test printed! Check which encoding shows Arabic correctly.",
+            "encodings_tested": [cp['name'] for cp in code_pages],
+        })
+
+    except Exception as e:
+        return jsonify({
+            "statusCode": 500,
+            "status": False,
+            "message": f"Print error: {str(e)}"
+        }), 500
