@@ -527,6 +527,80 @@ def test_receipt():
 set_printer_encoding(1)
 
 
+# @pos_printer_v2_api.route("/print-pos-v2", methods=["POST"])
+# def print_pos():
+#     """Print POS receipt with ESC/POS formatting to thermal printer"""
+#     data = request.get_json()
+#     if not data:
+#         result = {
+#             "statusCode": 400,
+#             "status": False,
+#             "message": "Missing request data",
+
+#         }
+#         return jsonify(result), 400
+
+#     printer_name = data.get("printer_name")
+#     receipt_data = data.get("receipt_data")
+
+#     if not printer_name or not receipt_data:
+#         result = {
+#             "statusCode": 400,
+#             "status": False,
+#             "message": "Missing printer_name or receipt_data",
+
+#         }
+#         return jsonify(result), 400
+
+#     try:
+#         # Set printer as default
+#         win32print.SetDefaultPrinter(printer_name)
+#     except Exception:
+#         result = {
+#             "statusCode": 404,
+#             "status": False,
+#             "message":  "Printer not found",
+
+#         }
+#         return jsonify(result), 404
+
+#     try:
+#         # Format receipt with ESC/POS commands
+#         formatted_receipt = format_laundry_receipt(receipt_data)
+
+#         # Clean and decode the receipt text
+#         # receipt_text = formatted_receipt.decode('utf-8', errors='ignore')
+
+#         receipt_text = decode_mixed_text(formatted_receipt)
+#         print(receipt_text)
+
+#         # Print to thermal printer
+#         hPrinter = win32print.OpenPrinter(printer_name)
+#         doc_info = ("POS Receipt", None, "RAW")
+#         hJob = win32print.StartDocPrinter(hPrinter, 1, doc_info)
+
+#         win32print.StartPagePrinter(hPrinter)
+#         win32print.WritePrinter(hPrinter, formatted_receipt)
+#         win32print.EndPagePrinter(hPrinter)
+#         win32print.EndDocPrinter(hPrinter)
+#         win32print.ClosePrinter(hPrinter)
+#         result = {
+#             "statusCode": 200,
+#             "status": True,
+#             "message":  "POS receipt printed successfully",
+
+#         }
+#         return jsonify(result)
+
+#     except Exception as e:
+#         result = {
+#             "statusCode": 500,
+#             "status": False,
+#             "message":  str(e),
+
+#         }
+#         return jsonify(result), 500
+
 @pos_printer_v2_api.route("/print-pos-v2", methods=["POST"])
 def print_pos():
     """Print POS receipt with ESC/POS formatting to thermal printer"""
@@ -536,19 +610,18 @@ def print_pos():
             "statusCode": 400,
             "status": False,
             "message": "Missing request data",
-
         }
         return jsonify(result), 400
 
     printer_name = data.get("printer_name")
     receipt_data = data.get("receipt_data")
+    loop_turn = data.get("loop_turn", 1)
 
     if not printer_name or not receipt_data:
         result = {
             "statusCode": 400,
             "status": False,
             "message": "Missing printer_name or receipt_data",
-
         }
         return jsonify(result), 400
 
@@ -559,8 +632,7 @@ def print_pos():
         result = {
             "statusCode": 404,
             "status": False,
-            "message":  "Printer not found",
-
+            "message": "Printer not found",
         }
         return jsonify(result), 404
 
@@ -568,27 +640,26 @@ def print_pos():
         # Format receipt with ESC/POS commands
         formatted_receipt = format_laundry_receipt(receipt_data)
 
-        # Clean and decode the receipt text
-        # receipt_text = formatted_receipt.decode('utf-8', errors='ignore')
-
         receipt_text = decode_mixed_text(formatted_receipt)
+        print(f"Printing {loop_turn} time(s)...")
         print(receipt_text)
 
-        # Print to thermal printer
-        hPrinter = win32print.OpenPrinter(printer_name)
-        doc_info = ("POS Receipt", None, "RAW")
-        hJob = win32print.StartDocPrinter(hPrinter, 1, doc_info)
+        # Print to thermal printer multiple times
+        for i in range(loop_turn):
+            hPrinter = win32print.OpenPrinter(printer_name)
+            doc_info = ("POS Receipt", None, "RAW")
+            hJob = win32print.StartDocPrinter(hPrinter, 1, doc_info)
 
-        win32print.StartPagePrinter(hPrinter)
-        win32print.WritePrinter(hPrinter, formatted_receipt)
-        win32print.EndPagePrinter(hPrinter)
-        win32print.EndDocPrinter(hPrinter)
-        win32print.ClosePrinter(hPrinter)
+            win32print.StartPagePrinter(hPrinter)
+            win32print.WritePrinter(hPrinter, formatted_receipt)
+            win32print.EndPagePrinter(hPrinter)
+            win32print.EndDocPrinter(hPrinter)
+            win32print.ClosePrinter(hPrinter)
+
         result = {
             "statusCode": 200,
             "status": True,
-            "message":  "POS receipt printed successfully",
-
+            "message": f"POS receipt printed {loop_turn} time(s) successfully",
         }
         return jsonify(result)
 
@@ -596,8 +667,7 @@ def print_pos():
         result = {
             "statusCode": 500,
             "status": False,
-            "message":  str(e),
-
+            "message": str(e),
         }
         return jsonify(result), 500
 
