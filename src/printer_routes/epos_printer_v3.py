@@ -1,13 +1,15 @@
 from datetime import datetime
 import os
+import subprocess
 import sys
+import threading
 import time
 import uuid
 import win32print
 import win32api
 import pdfkit
 from flask import Blueprint, request, jsonify
-
+ 
 pos_printer_v3_api = Blueprint("pos_printer_v3_api", __name__)
 
 
@@ -355,6 +357,119 @@ def preview_receipt():
             "message": str(e),
         }), 500
 
+@pos_printer_v3_api.route("/preview-receipt-pdf-v3", methods=["POST"])
+def preview_receipt_v3():
+    """Preview receipt as PDF without printing - optionally print if requested"""
+    data = request.get_json()
+
+    if not data:
+        return jsonify({
+            "statusCode": 400,
+            "status": False,
+            "message": "Missing request data",
+        }), 400
+
+    receipt_data = data.get("receipt_data") or data.get("pdf_data")
+    printer_name = data.get("printer_name")
+    print_now = data.get("print_now", False)
+
+    if not receipt_data:
+        return jsonify({
+            "statusCode": 400,
+            "status": False,
+            "message": "Missing receipt_data",
+        }), 400
+
+    try:
+        # Generate HTML receipt
+        html_content = generate_receipt_html(receipt_data)
+
+        # wkhtmltopdf options
+        options = {
+            'page-width': '80mm',
+            'encoding': "UTF-8",
+            'no-outline': None,
+            'margin-top': '0.05in',
+            'margin-right': '0.05in',
+            'margin-bottom': '0.05in',
+            'margin-left': '0.05in',
+        }
+
+        # Locate wkhtmltopdf
+        if getattr(sys, "frozen", False):
+            base_path = os.path.dirname(sys.executable)
+        else:
+            base_path = os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__)))
+
+        wkhtmltopdf_path = os.path.join(
+            base_path, "tools", "wkhtmltox", "bin", "wkhtmltopdf.exe")
+
+        if not os.path.exists(wkhtmltopdf_path):
+            raise Exception(f"wkhtmltopdf not found at: {wkhtmltopdf_path}")
+
+        config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+
+        # Create temporary directory for PDFs
+        cache_dir = os.path.join(os.environ.get("TEMP", "C:\\Temp"), "print_jobs")
+        os.makedirs(cache_dir, exist_ok=True)
+
+        preview_filename = f"receipt_preview_{uuid.uuid4().hex}.pdf"
+        preview_path = os.path.join(cache_dir, preview_filename)
+
+        # Generate PDF
+        pdfkit.from_string(html_content, preview_path,
+                           configuration=config, options=options)
+
+        # Verify PDF
+        if not os.path.exists(preview_path) or os.path.getsize(preview_path) < 100:
+            raise Exception(f"PDF file was not properly created: {preview_path}")
+
+        # ✅ Optional printing via SumatraPDF
+        if print_now:
+            if not printer_name:
+                raise Exception("Missing printer_name for printing")
+
+            # Validate printer
+            printers = [p[2] for p in win32print.EnumPrinters(2)]
+            if printer_name not in printers:
+                raise Exception(f"Printer '{printer_name}' not found. Available: {printers}")
+
+            # Locate SumatraPDF
+            if getattr(sys, "frozen", False):
+                base_path = os.path.dirname(sys.executable)
+            else:
+                base_path = os.path.dirname(os.path.abspath(__file__))
+
+            sumatra_path = os.path.join(base_path, "..","tools", "SumatraPDF", "SumatraPDF.exe")
+            sumatra_path = os.path.abspath(sumatra_path)
+
+            if not os.path.exists(sumatra_path):
+                raise Exception(f"SumatraPDF not found at {sumatra_path}")
+
+            # Print silently via SumatraPDF
+            cmd = f'"{sumatra_path}" -print-to "{printer_name}" -silent "{preview_path}"'
+            CREATE_NO_WINDOW = 0x08000000
+            subprocess.Popen(cmd, shell=True, creationflags=CREATE_NO_WINDOW)
+
+            # Optional cleanup thread
+            threading.Thread(target=delayed_cleanup, args=(preview_path,), daemon=True).start()
+
+        return jsonify({
+            "statusCode": 200,
+            "status": True,
+            "message": "Receipt preview generated successfully"
+                       + (" and sent to printer" if print_now else ""),
+            "pdf_path": preview_path,
+            "filename": preview_filename
+        })
+
+    except Exception as e:
+        return jsonify({
+            "statusCode": 500,
+            "status": False,
+            "message": str(e),
+        }), 500
 
 @pos_printer_v3_api.route("/test-arabic-encodings-v3", methods=["POST"])
 def test_arabic_encodings():
@@ -418,3 +533,13 @@ def test_arabic_encodings():
         "message": "Encoding test completed. Check printed output.",
         "results": results
     })
+
+
+def delayed_cleanup(path):
+    """Delete temporary file after delay"""
+    time.sleep(5)
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except:
+        pass
