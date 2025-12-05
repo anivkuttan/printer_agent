@@ -2,42 +2,69 @@ from src.printer_routes import get_routes
 from src.utils.tray import start_tray
 import os
 import sys
+import time
 from dotenv import load_dotenv
-from flask_cors import CORS
-from flask import Flask
-from logging.handlers import RotatingFileHandler
+from flask_cors import CORS, cross_origin
+from flask import Flask, jsonify, request, make_response
 
-# Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+
+CORS(app, 
+     resources={r"/*": {
+         "origins": "*",
+         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         "allow_headers": "*",
+         "supports_credentials": False
+     }})
+
+@app.after_request
+def add_cors_headers(response):
+    
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Max-Age"] = "3600" 
+    response.headers["Access-Control-Allow-Private-Network"] = "true"
+    
+    return response
+
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "*" 
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        
+        return response
+ 
 for route in get_routes():
     app.register_blueprint(route)
 
-
 if __name__ == "__main__":
-    import os
     import threading
     from waitress import serve
 
     port = int(os.getenv("PORT", 5009))
-    debug = os.getenv("DEBUG", "False").lower() == "true"
-    use_waitress = os.getenv("USE_WAITRESS", "False").lower() == "true"
+    use_waitress = os.getenv("USE_WAITRESS", "True").lower() == "true"
 
-    # Start tray icon in a background thread
     threading.Thread(target=start_tray, daemon=True).start()
 
+ 
+    print(f"Starting on http://0.0.0.0:{port}")
+    print(f"CORS: Enabled for ALL origins (*)")
+    print(f"Private Network Access: Enabled")
+    
     if use_waitress:
-        # Production: use Waitress
-        print(f"Starting with Waitress (production mode)...{port}")
-        serve(app, host="127.0.0.1", port=port)
+        print(f"Mode: Production (Waitress)")
+        serve(app, host="0.0.0.0", port=port, threads=4)
     else:
-        print(f"Starting with Flask dev server (debug mode)...{port}")
-        # Development: use Flask dev server
-        app.run(host="127.0.0.1", port=port, debug=debug, use_reloader=debug)
+        print(f"Mode: Development (Flask)")
+        app.run(host="0.0.0.0", port=port, debug=False)
