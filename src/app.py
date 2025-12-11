@@ -1,12 +1,20 @@
-from src.printer_routes import get_routes
-from src.utils.tray import start_tray
 import os
 import sys
-import time
+import threading
 from dotenv import load_dotenv
-from flask_cors import CORS, cross_origin
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, json, jsonify
+import urllib
+from waitress import serve
+from urllib.parse import urlparse, parse_qs 
+ 
+from src.utils.logger import logger
+from src.utils.tray import start_tray
+from src.printer_routes import get_routes
+from src.printer_routes.epos_printer_v6 import print_receipt
+ 
 
+
+# Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
@@ -15,56 +23,79 @@ load_dotenv()
 
 app = Flask(__name__)
 
-CORS(app, 
-     resources={r"/*": {
-         "origins": "*",
-         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         "allow_headers": "*",
-         "supports_credentials": False
-     }})
-
-@app.after_request
-def add_cors_headers(response):
-    
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Max-Age"] = "3600" 
-    response.headers["Access-Control-Allow-Private-Network"] = "true"
-    
-    return response
-
-@app.before_request
-def handle_preflight():
-    if request.method == "OPTIONS":
-        response = make_response()
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "*" 
-        response.headers["Access-Control-Allow-Private-Network"] = "true"
-        
-        return response
- 
 for route in get_routes():
     app.register_blueprint(route)
+ 
+ 
+def handle_url_command(url_string):
+    try:
+        parsed_url = urlparse(url_string)
+        command_from_path = parsed_url.path.strip('/')
+        command_from_host = parsed_url.netloc.split(':')[0] 
+
+        command = command_from_path if command_from_path else command_from_host
+        if not command:
+            command = "unknown"
+
+        logger.info(f"Agent launched via Custom URL Scheme. Command detected: {command}")
+
+        if command == 'ping':
+            logger.info("Custom URL 'ping' received successfully. Server VERSION v7.6.0 Exiting.")
+
+        elif command == 'print':
+            logger.info("Custom URL 'print' received successfully. Server VERSION v7.6.0")
+            query_params = parse_qs(parsed_url.query)
+
+            # Extract printer name
+            printer_name = query_params.get("printer_name", [""])[0]
+
+            # Extract and decode nested receipt data
+            data_json = query_params.get("data", ["{}"])[0]
+            receipt_data = json.loads(urllib.parse.unquote(data_json))
+
+            # Build the data dictionary expected by print_receipt
+            data = {
+                "printer_name": printer_name,
+                "receipt_data": receipt_data
+            }
+
+            # Call your printing function
+            print_receipt(data, flask_mode=False)
+
+            logger.info(f"Executed print job for printer: {printer_name}")
+
+        else:
+            logger.info(f"Unknown custom URL command received: {command}")
+
+    except Exception as e:
+        logger.info(f"Error handling custom URL command: {e}")
+
+    sys.exit(0)
 
 if __name__ == "__main__":
-    import threading
-    from waitress import serve
-
-    port = int(os.getenv("PORT", 5009))
-    use_waitress = os.getenv("USE_WAITRESS", "True").lower() == "true"
-
-    threading.Thread(target=start_tray, daemon=True).start()
-
  
-    print(f"Starting on http://0.0.0.0:{port}")
-    print(f"CORS: Enabled for ALL origins (*)")
-    print(f"Private Network Access: Enabled")
+    if len(sys.argv) > 1:
+      
+        handle_url_command(sys.argv[1])
+        
+        
+    # --- START BACKGROUND SERVICES AND SERVER (Default Mode) ---
+    
+    port = int(os.getenv("PORT", 5009))
+    debug = os.getenv("DEBUG", "false").lower() == "true"
+    use_waitress = os.getenv("USE_WAITRESS", "false").lower() == "true"
+    
+    # 1. Start Tray Icon
+    threading.Thread(target=start_tray, daemon=True).start()
+    
+  
+    # 3. Start Flask/Waitress Server (runs local API/status checks)
+    logger.info("Agent starting in Full Background Mode (Server + WebSocket).")
     
     if use_waitress:
-        print(f"Mode: Production (Waitress)")
-        serve(app, host="0.0.0.0", port=port, threads=4)
+        logger.info(f"Application running on Prod server at 127.0.0.1:{port} VERSION v7.6.4")
+        serve(app, host="127.0.0.1", port=port)
     else:
-        print(f"Mode: Development (Flask)")
-        app.run(host="0.0.0.0", port=port, debug=False)
+        logger.info(f"Application running on dev server at 127.0.0.1:{port}")
+        app.run(host="127.0.0.1", port=port, debug=debug, use_reloader=debug)
+ 

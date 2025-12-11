@@ -4,6 +4,8 @@ from flask import Blueprint, request, jsonify
 from bidi.algorithm import get_display
 from PIL import Image, ImageDraw, ImageFont
 
+from src.utils.logger import logger
+
 pos_printer_v6_api = Blueprint("pos_printer_v6_api", __name__)
 
 # ESC/POS Commands
@@ -368,17 +370,23 @@ def send_bitmap(hPrinter, img_bytes, width, height):
     win32print.WritePrinter(hPrinter, img_bytes)
 
 
-@pos_printer_v6_api.route("/print-receipt", methods=["POST"])
-def print_receipt():
+# @pos_printer_v6_api.route("/print-receipt", methods=["POST"])
+def print_receipt(data,flask_mode=False):
     """Print a complete bilingual receipt"""
-    data = request.get_json()
     
     if not data or not data.get("printer_name") or not data.get("receipt_data"):
-        return jsonify({
-            "status": False,
-            "statusCode": 400,
-            "message": "Missing printer_name or receipt_data"
-        }), 400
+        if flask_mode:
+            from flask import jsonify
+            return jsonify({
+                "status": False,
+                "statusCode": 400,
+                "message": "Missing printer_name or receipt_data"
+            }), 400
+        else:
+            logger.error("Missing printer_name or receipt_data")
+            return   
+ 
+        
     
     printer_name = data.get("printer_name")
     receipt = data.get("receipt_data")
@@ -555,19 +563,20 @@ def print_receipt():
         win32print.EndPagePrinter(hPrinter)
         win32print.EndDocPrinter(hPrinter)
         win32print.ClosePrinter(hPrinter)
+        msg = f"Receipt printed successfully on printer: {printer_name}"
+        logger.info(msg)
+
+        if flask_mode:
+            from flask import jsonify
+            return jsonify({"status": True, "statusCode": 200, "message": msg}), 200
         
-        return jsonify({
-            "status": True,
-            "statusCode": 200,
-            "message": "Receipt printed successfully"
-        }), 200
+        
         
     except Exception as e:
-        return jsonify({
-            "status": False,
-            "statusCode": 500,
-            "message": f"Print error: {str(e)}"
-        }), 500
+        logger.info(f"Print error: {e}")
+        if flask_mode:
+            from flask import jsonify
+            return jsonify({"status": False, "statusCode": 500, "message": f"Print error: {str(e)}"}), 500
     
 
 def print_bilingual_text(printer_name, english_text, arabic_text, font_size=35, align='left'):
