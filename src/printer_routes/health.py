@@ -24,3 +24,13 @@ def get_version():
         "data": {"version": __version__}
     }
     return jsonify(data)
+
+@health_api.route("/hello", methods=["GET"])
+def get_hello():
+    data = {
+        "statusCode": 200,
+        "status": True,
+        "message": "Agent is running hello",
+        "data": {"version": __version__}
+    }
+    return jsonify(data)

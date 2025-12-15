@@ -77,6 +77,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
       
         handle_url_command(sys.argv[1])
+        sys.exit(0)
         
         
     # --- START BACKGROUND SERVICES AND SERVER (Default Mode) ---

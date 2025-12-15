@@ -370,7 +370,115 @@ def send_bitmap(hPrinter, img_bytes, width, height):
     win32print.WritePrinter(hPrinter, img_bytes)
 
 
-# @pos_printer_v6_api.route("/print-receipt", methods=["POST"])
+def print_end_shift_line(label, value, font_size=22, arabic_label=""):
+    """Generate bitmap for end-shift report line with label and value"""
+    try:
+        # If Arabic label provided and not empty, format bilingual
+        if arabic_label:
+            reshaped = arabic_reshaper.reshape(arabic_label)
+            bidi_text = get_display(reshaped)
+            display_label = f"{bidi_text} / {label}"
+        else:
+            display_label = label
+        
+        font = None
+        font_options = [
+            "C:/Windows/Fonts/arial.ttf",
+            "C:/Windows/Fonts/times.ttf",
+            "C:/Windows/Fonts/tahoma.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "arial.ttf",
+        ]
+        
+        for font_path in font_options:
+            try:
+                font = ImageFont.truetype(font_path, font_size)
+                break
+            except:
+                continue
+        
+        if font is None:
+            font = ImageFont.load_default()
+        
+        width = 576
+        padding = 10
+        
+        # Use conservative printable area - thermal printers often have ~5-8mm margins
+        # At 203 DPI (common for 58mm thermal): 8mm ≈ 64 pixels per side
+        # So safe printable width is around 448-480 pixels
+        safe_margin = 48  # pixels from each edge
+        printable_width = width - (safe_margin * 2)  # 480 pixels
+        
+        # Measure text using temp image
+        temp_img = Image.new('1', (width, 100), 1)
+        temp_draw = ImageDraw.Draw(temp_img)
+        label_bbox = temp_draw.textbbox((0, 0), display_label, font=font)
+        value_bbox = temp_draw.textbbox((0, 0), value, font=font)
+        text_height = max(label_bbox[3] - label_bbox[1], value_bbox[3] - value_bbox[1])
+        value_width = value_bbox[2] - value_bbox[0]
+        
+        img_height = text_height + (2 * padding)
+        image = Image.new('1', (width, img_height), 1)
+        draw = ImageDraw.Draw(image)
+        
+        y = padding
+        
+        # Draw label on left (with safe margin)
+        draw.text((safe_margin, y), display_label, font=font, fill=0)
+        
+        # Draw value on right (within safe printable area)
+        x_value = width - safe_margin - value_width
+        draw.text((x_value, y), value, font=font, fill=0)
+        
+        # Ensure width is multiple of 8
+        if width % 8 != 0:
+            new_width = ((width // 8) + 1) * 8
+            new_image = Image.new('1', (new_width, img_height), 1)
+            new_image.paste(image, (0, 0))
+            image = new_image
+            width = new_width
+        
+        img_bytes = []
+        for y in range(img_height):
+            for x in range(0, width, 8):
+                byte_val = 0
+                for bit in range(8):
+                    pixel = image.getpixel((x + bit, y))
+                    if pixel == 0:
+                        byte_val |= (1 << (7 - bit))
+                img_bytes.append(byte_val)
+        
+        return bytes(img_bytes), width, img_height
+    except Exception as e:
+        return None, 0, 0
+
+
+@pos_printer_v6_api.route("/print-receipt", methods=["POST"]) 
+def print_receipt_route():
+    from flask import request, jsonify
+
+    try:
+        data = request.get_json()
+        print_receipt(data)
+
+        return jsonify({
+            "status": True,
+            "message": "Print job executed"
+        }), 200
+
+    except ValueError as e:
+        return jsonify({
+            "status": False,
+            "message": str(e)
+        }), 400
+
+    except Exception as e:
+        logger.exception(e)
+        return jsonify({
+            "status": False,
+            "message": "Internal server error"
+        }), 500
+        
 def print_receipt(data,flask_mode=False):
     """Print a complete bilingual receipt"""
     
@@ -696,6 +804,227 @@ def print_bilingual_text(printer_name, english_text, arabic_text, font_size=35, 
         return False, f"Error: {str(e)}"
 
 
+@pos_printer_v6_api.route("/end-shift", methods=["POST"])
+def end_shift_report():
+    """
+    Print cashier end of shift report
+    
+    Request body:
+    {
+        "printer_name": "Your Printer Name",
+        "branch_name": "Test branch",
+        "cashier_name": "ANIKUTTAN",
+        "report_date": "15-Dec-2025 10:55 AM",
+        "transaction_date": "05-Dec-2025",
+        "total_sales": 0.000,
+        "refund_amount": 0.000,
+        "net_sales": 0.000,
+        "card_amount": 0.000,
+        "cash_amount": 0.000,
+        "cash_float": 12.000,
+        "cash_in_drawer": 12.000,
+        "over_short": 0.000,
+        "include_arabic": false  // Optional: set to true to include Arabic labels
+    }
+    """
+    data = request.get_json()
+    
+    if not data or not data.get("printer_name"):
+        return jsonify({
+            "status": False,
+            "statusCode": 400,
+            "message": "Missing printer_name"
+        }), 400
+    
+    printer_name = data.get("printer_name")
+    include_arabic = data.get("include_arabic", False)
+    
+    # Default values
+    branch_name = data.get("branch_name", "Test branch")
+    cashier_name = data.get("cashier_name", "CASHIER")
+    report_date = data.get("report_date", "")
+    transaction_date = data.get("transaction_date", "")
+    
+    # Financial data
+    total_sales = data.get("total_sales", 0.0)
+    refund_amount = data.get("refund_amount", 0.0)
+    net_sales = data.get("net_sales", 0.0)
+    card_amount = data.get("card_amount", 0.0)
+    cash_amount = data.get("cash_amount", 0.0)
+    cash_float = data.get("cash_float", 0.0)
+    cash_in_drawer = data.get("cash_in_drawer", 0.0)
+    over_short = data.get("over_short", 0.0)
+    
+    # Arabic labels (only used if include_arabic is True)
+    arabic_labels = {
+        "branch": "الفرع",
+        "cashier": "الكاشير",
+        "transaction_date": "تاريخ المعاملة",
+        "total_sales": "إجمالي المبيعات",
+        "refund": "المبلغ المسترد",
+        "net_sales": "صافي المبيعات",
+        "card": "مبلغ البطاقة",
+        "cash": "المبلغ النقدي",
+        "float": "العوامة النقدية",
+        "drawer": "النقد في الدرج",
+        "over_short": "زيادة/نقص"
+    }
+    
+    try:
+        hPrinter = win32print.OpenPrinter(printer_name)
+        doc_info = ("End Shift Report", None, "RAW")
+        win32print.StartDocPrinter(hPrinter, 1, doc_info)
+        win32print.StartPagePrinter(hPrinter)
+        
+        win32print.WritePrinter(hPrinter, ESC_INIT)
+        
+        # Title
+        title = "CASHIER END OF SHIFT REPORT"
+        img_bytes, w, h = print_text_line(printer_name, title, font_size=28, align='center')
+        if img_bytes:
+            send_bitmap(hPrinter, img_bytes, w, h)
+        
+        win32print.WritePrinter(hPrinter, b"\n")
+        
+        # Branch name
+        img_bytes, w, h = print_text_line(printer_name, branch_name, font_size=24, align='center')
+        if img_bytes:
+            send_bitmap(hPrinter, img_bytes, w, h)
+        
+        win32print.WritePrinter(hPrinter, b"\n")
+        
+        # Cashier Name
+        cashier_label = "Cashier Name:"
+        cashier_text = f"{cashier_label} {cashier_name}"
+        img_bytes, w, h = print_text_line(printer_name, cashier_text, font_size=22, align='center')
+        if img_bytes:
+            send_bitmap(hPrinter, img_bytes, w, h)
+        
+        win32print.WritePrinter(hPrinter, b"\n")
+        
+        # Report Date
+        if report_date:
+            img_bytes, w, h = print_text_line(printer_name, report_date, font_size=20, align='center')
+            if img_bytes:
+                send_bitmap(hPrinter, img_bytes, w, h)
+        
+        # Transaction Date
+        if transaction_date:
+            trans_text = f"Transation Date: {transaction_date}"
+            img_bytes, w, h = print_text_line(printer_name, trans_text, font_size=20, align='center')
+            if img_bytes:
+                send_bitmap(hPrinter, img_bytes, w, h)
+        
+        # Separator line
+        img_bytes, w, h = print_dashed_line()
+        send_bitmap(hPrinter, img_bytes, w, h)
+        
+        win32print.WritePrinter(hPrinter, b"\n")
+        
+        # Financial details
+        
+        # Total Sales
+        img_bytes, w, h = print_end_shift_line(
+            "Total Sales :",
+            f"{total_sales:.3f} KWD",
+            font_size=22,
+            arabic_label=arabic_labels["total_sales"] if include_arabic else ""
+        )
+        if img_bytes:
+            send_bitmap(hPrinter, img_bytes, w, h)
+        
+        # Refund Amount
+        img_bytes, w, h = print_end_shift_line(
+            "Refund Amount :",
+            f"{refund_amount:.3f} KWD",
+            font_size=22,
+            arabic_label=arabic_labels["refund"] if include_arabic else ""
+        )
+        if img_bytes:
+            send_bitmap(hPrinter, img_bytes, w, h)
+        
+        # Net Sales (Bold/Larger font)
+        img_bytes, w, h = print_end_shift_line(
+            "Net Sales :",
+            f"{net_sales:.3f} KWD",
+            font_size=24,
+            arabic_label=arabic_labels["net_sales"] if include_arabic else ""
+        )
+        if img_bytes:
+            send_bitmap(hPrinter, img_bytes, w, h)
+        
+        # Card Amount
+        img_bytes, w, h = print_end_shift_line(
+            "Card Amount :",
+            f"{card_amount:.3f} KWD",
+            font_size=22,
+            arabic_label=arabic_labels["card"] if include_arabic else ""
+        )
+        if img_bytes:
+            send_bitmap(hPrinter, img_bytes, w, h)
+        
+        # Cash Amount
+        img_bytes, w, h = print_end_shift_line(
+            "Cash Amount :",
+            f"{cash_amount:.3f} KWD",
+            font_size=22,
+            arabic_label=arabic_labels["cash"] if include_arabic else ""
+        )
+        if img_bytes:
+            send_bitmap(hPrinter, img_bytes, w, h)
+        
+        # Cash Float
+        img_bytes, w, h = print_end_shift_line(
+            "Cash Float :",
+            f"{cash_float:.3f} KWD",
+            font_size=22,
+            arabic_label=arabic_labels["float"] if include_arabic else ""
+        )
+        if img_bytes:
+            send_bitmap(hPrinter, img_bytes, w, h)
+        
+        # Cash In Drawer
+        img_bytes, w, h = print_end_shift_line(
+            "Cash In Drawer :",
+            f"{cash_in_drawer:.3f} KWD",
+            font_size=22,
+            arabic_label=arabic_labels["drawer"] if include_arabic else ""
+        )
+        if img_bytes:
+            send_bitmap(hPrinter, img_bytes, w, h)
+        
+        # Over/Short
+        img_bytes, w, h = print_end_shift_line(
+            "Over/Short :",
+            f"{over_short:.3f} KWD",
+            font_size=22,
+            arabic_label=arabic_labels["over_short"] if include_arabic else ""
+        )
+        if img_bytes:
+            send_bitmap(hPrinter, img_bytes, w, h)
+        
+        # Final paper feed
+        win32print.WritePrinter(hPrinter, b"\n\n\n\n")
+        
+        win32print.EndPagePrinter(hPrinter)
+        win32print.EndDocPrinter(hPrinter)
+        win32print.ClosePrinter(hPrinter)
+        
+        return jsonify({
+            "status": True,
+            "statusCode": 200,
+            "message": f"End shift report printed successfully on printer: {printer_name}"
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"End shift print error: {e}")
+        return jsonify({
+            "status": False,
+            "statusCode": 500,
+            "message": f"Print error: {str(e)}"
+        }), 500
+
+
 @pos_printer_v6_api.route("/print-sample-list", methods=["POST"])
 def print_sample_list():
     """
@@ -788,4 +1117,3 @@ def print_sample_list():
             "statusCode": 500,
             "message": f"Print error: {str(e)}"
         }), 500
-
