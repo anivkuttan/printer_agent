@@ -5,12 +5,12 @@ from dotenv import load_dotenv
 from flask import Flask, json, jsonify
 import urllib
 from waitress import serve
-from urllib.parse import urlparse, parse_qs 
+from urllib.parse import parse_qsl, urlparse, parse_qs 
  
 from src.utils.logger import logger
 from src.utils.tray import start_tray
 from src.printer_routes import get_routes
-from src.printer_routes.epos_printer_v6 import print_receipt
+from src.printer_routes.epos_printer_v6 import end_shift_report, print_receipt
  
 
 
@@ -64,6 +64,14 @@ def handle_url_command(url_string):
 
             logger.info(f"Executed print job for printer: {printer_name}")
 
+        elif command == 'end-shift':
+
+            params = dict(parse_qsl(parsed_url.query))
+            logger.info(f"params: {params}")
+            end_shift_report(params, flask_mode=False)
+            logger.info(f"Executed print job for printer: {printer_name}")
+
+  
         else:
             logger.info(f"Unknown custom URL command received: {command}")
 

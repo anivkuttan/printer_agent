@@ -4,11 +4,11 @@
 
 [Setup]
 AppName=LAUNDRY Printer Agent
-AppVersion=7.6.4
+AppVersion=7.7.7
 DefaultDirName={autopf}\LAUNDRYPrinterAgent
 DefaultGroupName=LAUNDRY Printer Agent
 OutputDir=./dist/
-OutputBaseFilename=Laundry_Printer_Agent_Installer-7.6.4
+OutputBaseFilename=Laundry_Printer_Agent_Installer-7.7.7
 Compression=lzma
 SolidCompression=yes
 DisableDirPage=yes
@@ -20,7 +20,7 @@ UninstallDisplayIcon={app}\icon.ico
 ; Files
 ; -----------------------------------------------------------
 [Files]
-Source: "dist\laundry_printer_agent_7.6.4.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\laundry_printer_agent_7.7.7.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 Source: "src\tools\wkhtmltox\bin\wkhtmltopdf.exe"; \
@@ -41,7 +41,7 @@ Root: HKCR; Subkey: "laundryagent"; ValueType: string; ValueName: ""; ValueData:
 Root: HKCR; Subkey: "laundryagent"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
 Root: HKCR; Subkey: "laundryagent\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\icon.ico"
 Root: HKCR; Subkey: "laundryagent\shell\open\command"; ValueType: string; ValueName: ""; \
-    ValueData: """{app}\laundry_printer_agent_7.6.4.exe"" ""%1"""
+    ValueData: """{app}\laundry_printer_agent_7.7.7.exe"" ""%1"""
 
 ; -----------------------------------------------------------
 ; Auto-start at Windows login (BETTER than Startup shortcut)
@@ -49,14 +49,14 @@ Root: HKCR; Subkey: "laundryagent\shell\open\command"; ValueType: string; ValueN
 [Registry]
 Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; \
     ValueName: "LaundryPrinterAgent"; ValueType: string; \
-    ValueData: """{app}\laundry_printer_agent_7.6.4.exe"""; Flags: uninsdeletevalue
+    ValueData: """{app}\laundry_printer_agent_7.7.7.exe"""; Flags: uninsdeletevalue
 
 ; -----------------------------------------------------------
 ; Shortcuts
 ; -----------------------------------------------------------
 [Icons]
-Name: "{group}\LAUNDRY Printer Agent"; Filename: "{app}\laundry_printer_agent_7.6.4.exe"
-Name: "{commondesktop}\LAUNDRY Printer Agent"; Filename: "{app}\laundry_printer_agent_7.6.4.exe"
+Name: "{group}\LAUNDRY Printer Agent"; Filename: "{app}\laundry_printer_agent_7.7.7.exe"
+Name: "{commondesktop}\LAUNDRY Printer Agent"; Filename: "{app}\laundry_printer_agent_7.7.7.exe"
 
 ; (Startup folder shortcut is removed — registry auto-start is more reliable)
 
@@ -64,7 +64,7 @@ Name: "{commondesktop}\LAUNDRY Printer Agent"; Filename: "{app}\laundry_printer_
 ; Run on Finish
 ; -----------------------------------------------------------
 [Run]
-Filename: "{app}\laundry_printer_agent_7.6.4.exe"; \
+Filename: "{app}\laundry_printer_agent_7.7.7.exe"; \
     Description: "Start Agent Now"; \
     Flags: nowait postinstall skipifsilent
 

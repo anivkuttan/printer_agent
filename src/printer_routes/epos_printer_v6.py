@@ -804,8 +804,36 @@ def print_bilingual_text(printer_name, english_text, arabic_text, font_size=35, 
         return False, f"Error: {str(e)}"
 
 
-@pos_printer_v6_api.route("/end-shift", methods=["POST"])
-def end_shift_report():
+
+
+
+@pos_printer_v6_api.route("/end-shift", methods=["POST"]) 
+def end_shift_report_route():
+    from flask import request, jsonify
+
+    try:
+        data = request.get_json()
+        end_shift_report(data,flask_mode=True)
+
+        return jsonify({
+            "status": True,
+            "message": "Print job executed"
+        }), 200
+
+    except ValueError as e:
+        return jsonify({
+            "status": False,
+            "message": str(e)
+        }), 400
+
+    except Exception as e:
+        logger.exception(e)
+        return jsonify({
+            "status": False,
+            "message": "Internal server error"
+        }), 500
+
+def end_shift_report(data,flask_mode =False):
     """
     Print cashier end of shift report
     
@@ -827,7 +855,22 @@ def end_shift_report():
         "include_arabic": false  // Optional: set to true to include Arabic labels
     }
     """
-    data = request.get_json()
+
+ 
+    if not data or not data.get("printer_name"):
+        if flask_mode:
+            from flask import jsonify
+            return jsonify({
+                "status": False,
+                "statusCode": 400,
+                "message": "Missing printer_name or receipt_data"
+            }), 400
+        else:
+            logger.error("Missing printer_name or receipt_data")
+            return   
+ 
+        
+    
     
     if not data or not data.get("printer_name"):
         return jsonify({
@@ -841,6 +884,7 @@ def end_shift_report():
     
     # Default values
     branch_name = data.get("branch_name", "Test branch")
+    title = data.get("title", "SHIFT REPORT")
     cashier_name = data.get("cashier_name", "CASHIER")
     report_date = data.get("report_date", "")
     transaction_date = data.get("transaction_date", "")
@@ -878,8 +922,7 @@ def end_shift_report():
         
         win32print.WritePrinter(hPrinter, ESC_INIT)
         
-        # Title
-        title = "CASHIER END OF SHIFT REPORT"
+        # Title 
         img_bytes, w, h = print_text_line(printer_name, title, font_size=28, align='center')
         if img_bytes:
             send_bitmap(hPrinter, img_bytes, w, h)
