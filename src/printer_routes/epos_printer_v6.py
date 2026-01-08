@@ -480,6 +480,7 @@ def print_receipt_route():
         }), 500
         
 def print_receipt(data,flask_mode=False):
+    from flask import  jsonify
     """Print a complete bilingual receipt"""
     
     if not data or not data.get("printer_name") or not data.get("receipt_data"):
@@ -806,7 +807,12 @@ def print_bilingual_text(printer_name, english_text, arabic_text, font_size=35, 
 
 
 
-
+def to_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+    
 @pos_printer_v6_api.route("/end-shift", methods=["POST"]) 
 def end_shift_report_route():
     from flask import request, jsonify
@@ -890,14 +896,14 @@ def end_shift_report(data,flask_mode =False):
     transaction_date = data.get("transaction_date", "")
     
     # Financial data
-    total_sales = data.get("total_sales", 0.0)
-    refund_amount = data.get("refund_amount", 0.0)
-    net_sales = data.get("net_sales", 0.0)
-    card_amount = data.get("card_amount", 0.0)
-    cash_amount = data.get("cash_amount", 0.0)
-    cash_float = data.get("cash_float", 0.0)
-    cash_in_drawer = data.get("cash_in_drawer", 0.0)
-    over_short = data.get("over_short", 0.0)
+    total_sales = to_float(data.get("total_sales", "0.0"))
+    refund_amount = to_float(data.get("refund_amount", "0.0"))
+    net_sales = to_float(data.get("net_sales", 0.0))
+    card_amount = to_float(data.get("card_amount", 0.0))
+    cash_amount = to_float(data.get("cash_amount", 0.0))
+    cash_float = to_float( data.get("cash_float", 0.0))
+    cash_in_drawer =to_float( data.get("cash_in_drawer", 0.0))
+    over_short = to_float(data.get("over_short", 0.0))
     
     # Arabic labels (only used if include_arabic is True)
     arabic_labels = {
