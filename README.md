@@ -82,11 +82,13 @@ build_agent.bat
 ```
 
 This will:
+
 - Compile the `.exe` using PyInstaller
 - Generate an installer using Inno Setup
 - Output both into the `dist/` folder
 
 > ✅ Output:
+>
 > - `dist\laundry_printer_agent.exe`
 > - `dist\LAUNDRYPrinterAgentInstaller.exe`
 
@@ -106,6 +108,7 @@ Content-Type: application/json
 ```
 
 For terminal text:
+
 ```json
 {
   "printer_name": "Thermal POS",
@@ -135,8 +138,8 @@ printer_agent/
 ├── requirements.txt
 ├── printer_agent.iss
 │
-├── dist/                 
-├── build/            
+├── dist/
+├── build/
 ├── src/
 │   ├── app.py
 │   ├── tray.py
@@ -146,4 +149,9 @@ printer_agent/
 ```
 
 ---
- 
+
+ <!-- .\.venv\Scripts\activate -->
+
+<!-- Win + R -->
+<!-- make sure the .bat and vbs file have the correct project path-->
+<!-- shell:startup -->

@@ -2,8 +2,7 @@ import win32print
 import arabic_reshaper
 from flask import Blueprint, request, jsonify
 from bidi.algorithm import get_display
-from PIL import Image, ImageDraw, ImageFont
-
+from PIL import Image, ImageDraw, ImageFont 
 from src.utils.logger import logger
 
 pos_printer_v6_api = Blueprint("pos_printer_v6_api", __name__)
@@ -479,23 +478,10 @@ def print_receipt_route():
             "message": "Internal server error"
         }), 500
         
-def print_receipt(data,flask_mode=False):
+def print_receipt(data ):
     from flask import  jsonify
     """Print a complete bilingual receipt"""
     
-    if not data or not data.get("printer_name") or not data.get("receipt_data"):
-        if flask_mode:
-            from flask import jsonify
-            return jsonify({
-                "status": False,
-                "statusCode": 400,
-                "message": "Missing printer_name or receipt_data"
-            }), 400
-        else:
-            logger.error("Missing printer_name or receipt_data")
-            return   
- 
-        
     
     printer_name = data.get("printer_name")
     receipt = data.get("receipt_data")
@@ -673,19 +659,13 @@ def print_receipt(data,flask_mode=False):
         win32print.EndDocPrinter(hPrinter)
         win32print.ClosePrinter(hPrinter)
         msg = f"Receipt printed successfully on printer: {printer_name}"
-        logger.info(msg)
-
-        if flask_mode:
-            from flask import jsonify
-            return jsonify({"status": True, "statusCode": 200, "message": msg}), 200
+        logger.info(msg) 
+        return jsonify({"status": True, "statusCode": 200, "message": msg}), 200
         
         
         
     except Exception as e:
         logger.info(f"Print error: {e}")
-        if flask_mode:
-            from flask import jsonify
-            return jsonify({"status": False, "statusCode": 500, "message": f"Print error: {str(e)}"}), 500
     
 
 def print_bilingual_text(printer_name, english_text, arabic_text, font_size=35, align='left'):
@@ -815,11 +795,11 @@ def to_float(value, default=0.0):
     
 @pos_printer_v6_api.route("/end-shift", methods=["POST"]) 
 def end_shift_report_route():
-    from flask import request, jsonify
+
 
     try:
         data = request.get_json()
-        end_shift_report(data,flask_mode=True)
+        end_shift_report(data)
 
         return jsonify({
             "status": True,
@@ -839,7 +819,7 @@ def end_shift_report_route():
             "message": "Internal server error"
         }), 500
 
-def end_shift_report(data,flask_mode =False):
+def end_shift_report(data):
     """
     Print cashier end of shift report
     
@@ -864,16 +844,12 @@ def end_shift_report(data,flask_mode =False):
 
  
     if not data or not data.get("printer_name"):
-        if flask_mode:
-            from flask import jsonify
-            return jsonify({
+        return jsonify({
                 "status": False,
                 "statusCode": 400,
                 "message": "Missing printer_name or receipt_data"
             }), 400
-        else:
-            logger.error("Missing printer_name or receipt_data")
-            return   
+      
  
         
     
