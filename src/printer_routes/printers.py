@@ -1,28 +1,21 @@
-# from flask import Blueprint, request, jsonify
-# import os
-# import uuid
-# import time
-# import subprocess
-# import threading
-# import pdfkit
-# import win32print
-# from src.utils.printer_utils import list_printers, get_default_printer, safe_base64_decode
-
+# from flask import   jsonify
+ 
+from src.utils.printer_utils import list_printers, get_default_printer 
 # printer_api = Blueprint("printer_api", __name__)
 
 
-# # @printer_api.route("/get-printers", methods=["GET"])
-# # def get_printers():
-# #     try:
-# #         printer_names = list_printers()
-# #         default_printer = get_default_printer()
-# #         return jsonify({
-# #             "status": 200,
-# #             "printers": printer_names,
-# #             "default_printer": default_printer,
-# #         })
-# #     except Exception as e:
-# #         return jsonify({"status": 500, "error": True, "error_msg": str(e)}), 500
+# @printer_api.route("/get-printers", methods=["GET"])
+def get_printers():
+    try:
+        printer_names = list_printers()
+        default_printer = get_default_printer()
+        return {
+            "status": 200,
+            "printers": printer_names,
+            "default_printer": default_printer,
+        }
+    except Exception as e:
+        return {"status": 500, "error": True, "error_msg": str(e)}
 
 
 # @printer_api.route("/printers", methods=["POST"])

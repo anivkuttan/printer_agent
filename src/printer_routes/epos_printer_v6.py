@@ -1,11 +1,11 @@
 import win32print 
 import arabic_reshaper
-from flask import Blueprint, request, jsonify
+# from flask import Blueprint, request, jsonify
 from bidi.algorithm import get_display
 from PIL import Image, ImageDraw, ImageFont 
 from src.utils.logger import logger
 
-pos_printer_v6_api = Blueprint("pos_printer_v6_api", __name__)
+# pos_printer_v6_api = Blueprint("pos_printer_v6_api", __name__)
 
 # ESC/POS Commands
 ESC_INIT = b'\x1B\x40'
@@ -452,40 +452,43 @@ def print_end_shift_line(label, value, font_size=22, arabic_label=""):
         return None, 0, 0
 
 
-@pos_printer_v6_api.route("/print-receipt", methods=["POST"]) 
-def print_receipt_route():
-    from flask import request, jsonify
+# @pos_printer_v6_api.route("/print-receipt", methods=["POST"]) 
+# def print_receipt_route():
 
-    try:
-        data = request.get_json()
-        print_receipt(data)
+#     try:
+#         data = request.get_json()
+#         print_receipt(data)
 
-        return jsonify({
-            "status": True,
-            "message": "Print job executed"
-        }), 200
+#         return jsonify({
+#             "status": True,
+#             "message": "Print job executed"
+#         }), 200
 
-    except ValueError as e:
-        return jsonify({
-            "status": False,
-            "message": str(e)
-        }), 400
+#     except ValueError as e:
+#         return jsonify({
+#             "status": False,
+#             "message": str(e)
+#         }), 400
 
-    except Exception as e:
-        logger.exception(e)
-        return jsonify({
-            "status": False,
-            "message": "Internal server error"
-        }), 500
+#     except Exception as e:
+#         logger.exception(e)
+#         return jsonify({
+#             "status": False,
+#             "message": "Internal server error"
+#         }), 500
         
-def print_receipt(data ):
-    from flask import  jsonify
+def print_receipt(data ): 
     """Print a complete bilingual receipt"""
     
     
     printer_name = data.get("printer_name")
     receipt = data.get("receipt_data")
     
+    if not printer_name or not receipt:
+        error_msg = "Missing printer_name or receipt_data"
+        logger.error(error_msg)
+        raise Exception(error_msg)
+
     try:
         hPrinter = win32print.OpenPrinter(printer_name)
         doc_info = ("Receipt Print", None, "RAW")
@@ -660,7 +663,7 @@ def print_receipt(data ):
         win32print.ClosePrinter(hPrinter)
         msg = f"Receipt printed successfully on printer: {printer_name}"
         logger.info(msg) 
-        return jsonify({"status": True, "statusCode": 200, "message": msg}), 200
+        return {"status": True, "statusCode": 200, "message": msg}
         
         
         
@@ -793,31 +796,31 @@ def to_float(value, default=0.0):
     except (TypeError, ValueError):
         return default
     
-@pos_printer_v6_api.route("/end-shift", methods=["POST"]) 
-def end_shift_report_route():
+# @pos_printer_v6_api.route("/end-shift", methods=["POST"]) 
+# def end_shift_report_route():
 
 
-    try:
-        data = request.get_json()
-        end_shift_report(data)
+#     try:
+#         data = request.get_json()
+#         end_shift_report(data)
 
-        return jsonify({
-            "status": True,
-            "message": "Print job executed"
-        }), 200
+#         return {
+#             "status": True,
+#             "message": "Print job executed"
+#         }
 
-    except ValueError as e:
-        return jsonify({
-            "status": False,
-            "message": str(e)
-        }), 400
+#     except ValueError as e:
+#         return {
+#             "status": False,
+#             "message": str(e)
+#         }
 
-    except Exception as e:
-        logger.exception(e)
-        return jsonify({
-            "status": False,
-            "message": "Internal server error"
-        }), 500
+#     except Exception as e:
+#         logger.exception(e)
+#         return {
+#             "status": False,
+#             "message": "Internal server error"
+#         }
 
 def end_shift_report(data):
     """
@@ -844,22 +847,22 @@ def end_shift_report(data):
 
  
     if not data or not data.get("printer_name"):
-        return jsonify({
+        return {
                 "status": False,
                 "statusCode": 400,
                 "message": "Missing printer_name or receipt_data"
-            }), 400
+            }
       
  
         
     
     
     if not data or not data.get("printer_name"):
-        return jsonify({
+        return {
             "status": False,
             "statusCode": 400,
             "message": "Missing printer_name"
-        }), 400
+        }
     
     printer_name = data.get("printer_name")
     include_arabic = data.get("include_arabic", False)
@@ -1035,18 +1038,18 @@ def end_shift_report(data):
         win32print.EndDocPrinter(hPrinter)
         win32print.ClosePrinter(hPrinter)
         
-        return jsonify({
+        return {
             "status": True,
             "statusCode": 200,
             "message": f"End shift report printed successfully on printer: {printer_name}"
-        }), 200
+        }
         
     except Exception as e:
         logger.error(f"End shift print error: {e}")
-        return jsonify({
+        return {
             "status": False,
             "statusCode": 500,
             "message": f"Print error: {str(e)}"
-        }), 500
+        }
 
  

@@ -1,10 +1,10 @@
-from flask import Blueprint, jsonify
+# from flask import  jsonify
 from src.utils.version import __version__
 
-health_api = Blueprint("health_api", __name__)
+# health_api = Blueprint("health_api", __name__)
 
 
-@health_api.route("/ping", methods=["GET"])
+# @health_api.route("/ping", methods=["GET"])
 def ping():
     data = {
         "statusCode": 200,
@@ -12,10 +12,10 @@ def ping():
         "message": "Agent is running",
         "data": {"status": "ok", "version": __version__}
     }
-    return jsonify(data), 200
+    return data
 
 
-@health_api.route("/version", methods=["GET"])
+# @health_api.route("/version", methods=["GET"])
 def get_version():
     data = {
         "statusCode": 200,
@@ -23,6 +23,6 @@ def get_version():
         "message": "Agent is running",
         "data": {"version": __version__}
     }
-    return jsonify(data)
+    return data
 
  
