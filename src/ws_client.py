@@ -6,6 +6,7 @@ from src.printer_routes.health import get_version,ping
 from src.printer_routes.printers import  get_printers,get_default_printer
 from src.printer_routes.epos_printer_v6 import end_shift_report, print_receipt
 from src.utils.logger import logger 
+from src.utils.version import __version__
 WS_CONNECTED = False
 # Node.js WS server URL
 WS_URL = "ws://13.126.157.19/api/ws/"  
@@ -97,10 +98,10 @@ def on_open(ws):
     WS_CONNECTED = True
 
     logger.info(
-        f"[WS_CONNECTED] Connected to backend: {WS_URL}"
+        f"[WS_CONNECTED] Connected to backend: {WS_URL} Version: {__version__}"
     )
     print(
-        f"[WS_CONNECTED] Connected to backend: {WS_URL}"
+        f"[WS_CONNECTED] Connected to backend: {WS_URL} Version: {__version__}"
     )
 
     ws.send(json.dumps({
